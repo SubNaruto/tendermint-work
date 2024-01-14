@@ -1220,7 +1220,7 @@ func (n *Node) startRPC() ([]net.Listener, error) {
 // collectors on addr.
 func (n *Node) startPrometheusServer(addr string) *http.Server {
 
-	fmt.Println("[[[[[[[[[[[[[[[[[[[[[[[[[prometheus server addr")
+	fmt.Println("[[[[[[[[[[[[[[[[[[[[[[prometheus server addr")
 	fmt.Println(addr)
 	srv := &http.Server{
 		Addr: addr,
