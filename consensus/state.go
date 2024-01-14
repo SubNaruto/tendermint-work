@@ -1716,10 +1716,10 @@ func (cs *State) pruneBlocks(retainHeight int64) (uint64, error) {
 }
 
 func (cs *State) recordMetrics(height int64, block *types.Block) {
-	cs.metrics.Validators.Set(float64(cs.Validators.Size()))
-	cs.metrics.ValidatorsPower.Set(float64(cs.Validators.TotalVotingPower()))
+	cs.metrics.Validators.Set(float64(cs.Validators.Size()))                  //验证者数量
+	cs.metrics.ValidatorsPower.Set(float64(cs.Validators.TotalVotingPower())) //验证者的总投票权
 
-	var (
+	var ( //声明了两个变量，用于跟踪缺失的验证者数量和其总投票权
 		missingValidators      int
 		missingValidatorsPower int64
 	)
@@ -1730,77 +1730,80 @@ func (cs *State) recordMetrics(height int64, block *types.Block) {
 		// Sanity check that commit size matches validator set size - only applies
 		// after first block.
 		var (
-			commitSize = block.LastCommit.Size()
-			valSetLen  = len(cs.LastValidators.Validators)
-			address    types.Address
+			commitSize = block.LastCommit.Size()           //区块的LastCommit大小
+			valSetLen  = len(cs.LastValidators.Validators) //上一个区块的验证者集的大小
+			address    types.Address                       //私钥地址
 		)
-		if commitSize != valSetLen {
+		if commitSize != valSetLen { //一致性检查，确保当前区块的LastCommit大小与上一个区块的验证者集大小相匹配。
 			panic(fmt.Sprintf("commit size (%d) doesn't match valset length (%d) at height %d\n\n%v\n\n%v",
 				commitSize, valSetLen, block.Height, block.LastCommit.Signatures, cs.LastValidators.Validators))
 		}
 
-		if cs.privValidator != nil {
+		if cs.privValidator != nil { //如果节点有私钥
 			if cs.privValidatorPubKey == nil {
 				// Metrics won't be updated, but it's not critical.
 				cs.Logger.Error(fmt.Sprintf("recordMetrics: %v", errPubKeyIsNotSet))
 			} else {
-				address = cs.privValidatorPubKey.Address()
+				address = cs.privValidatorPubKey.Address() //如果公钥不为空，获取公钥地址
 			}
 		}
 
-		for i, val := range cs.LastValidators.Validators {
-			commitSig := block.LastCommit.Signatures[i]
-			if commitSig.Absent() {
+		for i, val := range cs.LastValidators.Validators { //遍历上一个区块的验证者集
+			commitSig := block.LastCommit.Signatures[i] //获取当前验证者在LastCommit中的签名
+			if commitSig.Absent() {                     //检查当前验证者的签名是否缺失，如果是，则增加缺失验证者数量和其总投票权
 				missingValidators++
 				missingValidatorsPower += val.VotingPower
 			}
 
-			if bytes.Equal(val.Address, address) {
+			if bytes.Equal(val.Address, address) { //检查当前验证者是否为节点本身的验证者
 				label := []string{
 					"validator_address", val.Address.String(),
-				}
-				cs.metrics.ValidatorPower.With(label...).Set(float64(val.VotingPower))
-				if commitSig.ForBlock() {
+				} //创建一个标签数组，用于标识当前验证者的地址
+				cs.metrics.ValidatorPower.With(label...).Set(float64(val.VotingPower)) //设置当前验证者的投票权度量
+				if commitSig.ForBlock() {                                              //检查当前验证者的签名是否为区块签名，如果是，则设置最后一次签名的区块高度
 					cs.metrics.ValidatorLastSignedHeight.With(label...).Set(float64(height))
-				} else {
+				} else { //如果当前验证者的签名不是为区块签名，则增加验证者错过的区块数量
 					cs.metrics.ValidatorMissedBlocks.With(label...).Add(float64(1))
 				}
 			}
 
 		}
 	}
-	cs.metrics.MissingValidators.Set(float64(missingValidators))
-	cs.metrics.MissingValidatorsPower.Set(float64(missingValidatorsPower))
+	cs.metrics.MissingValidators.Set(float64(missingValidators))           //缺失的验证者数量
+	cs.metrics.MissingValidatorsPower.Set(float64(missingValidatorsPower)) //缺失验证者的总投票权数
 
 	// NOTE: byzantine validators power and count is only for consensus evidence i.e. duplicate vote
 	var (
 		byzantineValidatorsPower = int64(0)
 		byzantineValidatorsCount = int64(0)
 	)
-	for _, ev := range block.Evidence.Evidence {
-		if dve, ok := ev.(*types.DuplicateVoteEvidence); ok {
-			if _, val := cs.Validators.GetByAddress(dve.VoteA.ValidatorAddress); val != nil {
-				byzantineValidatorsCount++
-				byzantineValidatorsPower += val.VotingPower
+	for _, ev := range block.Evidence.Evidence { //遍历区块中的证据列表
+		if dve, ok := ev.(*types.DuplicateVoteEvidence); ok { //检查当前证据是否为重复投票证据
+			if _, val := cs.Validators.GetByAddress(dve.VoteA.ValidatorAddress); val != nil { //通过证据中的投票地址获取相应的验证者信息，如果验证者信息存在，说明这个验证者参与了重复投票
+				byzantineValidatorsCount++                  //增加byzantineValidatorsCount变量，表示有一个验证者参与了重复投票
+				byzantineValidatorsPower += val.VotingPower //该验证者的投票权重累加到byzantineValidatorsPower变量中，表示参与重复投票的验证者的总投票权重。
 			}
 		}
 	}
-	cs.metrics.ByzantineValidators.Set(float64(byzantineValidatorsCount))
-	cs.metrics.ByzantineValidatorsPower.Set(float64(byzantineValidatorsPower))
+	cs.metrics.ByzantineValidators.Set(float64(byzantineValidatorsCount))      //拜占庭验证者的数量
+	cs.metrics.ByzantineValidatorsPower.Set(float64(byzantineValidatorsPower)) //拜占庭验证者的总投票权
 
-	if height > 1 {
-		lastBlockMeta := cs.blockStore.LoadBlockMeta(height - 1)
-		if lastBlockMeta != nil {
+	if height > 1 { //检查当前区块的高度是否大于1，表示不是创世区块，而是在创世区块之后的区块
+		lastBlockMeta := cs.blockStore.LoadBlockMeta(height - 1) //加载前一个区块的元数据，包含前一个区块的头部信息
+		if lastBlockMeta != nil {                                //成功获取
 			cs.metrics.BlockIntervalSeconds.Observe(
 				block.Time.Sub(lastBlockMeta.Header.Time).Seconds(),
-			)
+			) //使用Observe记录区块间的时间间隔。这是一个Histogram（直方图）指标，用于观察和记录值的分布情况，这里记录了区块之间的时间差（以秒为单位）。
 		}
 	}
 
-	cs.metrics.NumTxs.Set(float64(len(block.Data.Txs)))
-	cs.metrics.TotalTxs.Add(float64(len(block.Data.Txs)))
-	cs.metrics.BlockSizeBytes.Set(float64(block.Size()))
-	cs.metrics.CommittedHeight.Set(float64(block.Height))
+	fmt.Println("[[[[[[[[[[[[[[[[[[[[[[[[metrics txs add")
+	fmt.Println("totalTxs初始值：")
+	fmt.Println(cs.metrics.TotalTxs)
+	cs.metrics.NumTxs.Set(float64(len(block.Data.Txs)))   //当前区块中交易的数量
+	cs.metrics.TotalTxs.Add(float64(len(block.Data.Txs))) //当前区块中交易的数量累加到总交易数量中
+	cs.metrics.BlockSizeBytes.Set(float64(block.Size()))  //当前区块的大小
+	cs.metrics.CommittedHeight.Set(float64(block.Height)) //当前区块的高度
 }
 
 //-----------------------------------------------------------------------------

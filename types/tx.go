@@ -43,7 +43,7 @@ func (tx Tx) String() string {
 type Txs []Tx
 
 // Hash returns the Merkle root hash of the transaction hashes.
-// i.e. the leaves of the tree are the hashes of the txs.
+// i.e. the leaves of the tree are the hashes of the txs.树的叶子是交易的哈希值
 func (txs Txs) Hash() []byte {
 	// These allocations will be removed once Txs is switched to [][]byte,
 	// ref #2603. This is because golang does not allow type casting slices without unsafe

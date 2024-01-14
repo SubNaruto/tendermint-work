@@ -93,6 +93,17 @@ func AddNodeFlags(cmd *cobra.Command) {
 		"db_dir",
 		config.DBPath,
 		"database directory")
+
+	//prometheus服务
+	cmd.Flags().Bool(
+		"instrumentation.prometheus",
+		config.Instrumentation.Prometheus,
+		"set this to true to start prometheus service")
+	cmd.Flags().String(
+		"instrumentation.prometheus_listen_addr",
+		config.Instrumentation.PrometheusListenAddr,
+		"prometheus listen address")
+
 }
 
 // NewRunNodeCmd returns the command that allows the CLI to start a node.

@@ -937,31 +937,33 @@ func NewNode(config *cfg.Config,
 	return node, nil
 }
 
-// OnStart starts the Node. It implements service.Service.
+// OnStart starts the Node. It implements service.Service.节点启动
 func (n *Node) OnStart() error {
+
 	now := tmtime.Now()
-	genTime := n.genesisDoc.GenesisTime
+	genTime := n.genesisDoc.GenesisTime //创世区块时间
 	if genTime.After(now) {
 		n.Logger.Info("Genesis time is in the future. Sleeping until then...", "genTime", genTime)
-		time.Sleep(genTime.Sub(now))
+		time.Sleep(genTime.Sub(now)) //创世时间在未来，节点休眠等待
 	}
 
-	// Add private IDs to addrbook to block those peers being added
+	// Add private IDs to addrbook to block those peers being added 将私有节点的ID添加到地址簿，阻止这些节点再被添加。
 	n.addrBook.AddPrivateIDs(splitAndTrimEmpty(n.config.P2P.PrivatePeerIDs, ",", " "))
 
 	// Start the RPC server before the P2P server
 	// so we can eg. receive txs for the first block
-	if n.config.RPC.ListenAddress != "" {
+	if n.config.RPC.ListenAddress != "" { //RPC服务的监听地址不为空，即配置了监听地址
 		listeners, err := n.startRPC()
 		if err != nil {
 			return err
 		}
-		n.rpcListeners = listeners
+		n.rpcListeners = listeners //将RPC服务的监听器列表保存到节点的rpcListeners属性中
 	}
 
 	if n.config.Instrumentation.Prometheus &&
-		n.config.Instrumentation.PrometheusListenAddr != "" {
-		n.prometheusSrv = n.startPrometheusServer(n.config.Instrumentation.PrometheusListenAddr)
+		n.config.Instrumentation.PrometheusListenAddr != "" { //若启用Prometheus监控且配置Prometheus监听地址
+		//fmt.Println("[[[[[[[[[[[[[[[[[[[[[[[[[prometheus onstart")
+		n.prometheusSrv = n.startPrometheusServer(n.config.Instrumentation.PrometheusListenAddr) //启动Prometheus服务，返回Prometheus服务器实例保存到节点的prometheusSrv属性中
 	}
 
 	// Start the transport.
@@ -1217,6 +1219,9 @@ func (n *Node) startRPC() ([]net.Listener, error) {
 // startPrometheusServer starts a Prometheus HTTP server, listening for metrics
 // collectors on addr.
 func (n *Node) startPrometheusServer(addr string) *http.Server {
+
+	fmt.Println("[[[[[[[[[[[[[[[[[[[[[[[[[prometheus server addr")
+	fmt.Println(addr)
 	srv := &http.Server{
 		Addr: addr,
 		Handler: promhttp.InstrumentMetricHandler(

@@ -38,6 +38,7 @@ var logger = log.NewTMLogger(log.NewSyncWriter(os.Stdout))
 
 // main is the binary entrypoint.
 func main() {
+
 	if len(os.Args) != 2 {
 		fmt.Printf("Usage: %v <configfile>", os.Args[0])
 		return

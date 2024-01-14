@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"fmt"
 	"github.com/go-kit/kit/metrics"
 	"github.com/go-kit/kit/metrics/discard"
 
@@ -82,11 +83,14 @@ type Metrics struct {
 // Optionally, labels can be provided along with their values ("foo",
 // "fooValue").
 func PrometheusMetrics(namespace string, labelsAndValues ...string) *Metrics {
+	fmt.Println("输出labelsAndValues")
+	fmt.Println(labelsAndValues)
+	fmt.Println("输出labelsAndValues结束")
 	labels := []string{}
 	for i := 0; i < len(labelsAndValues); i += 2 {
 		labels = append(labels, labelsAndValues[i])
 	}
-	return &Metrics{
+	met := &Metrics{
 		Height: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: MetricsSubsystem,
@@ -217,6 +221,15 @@ func PrometheusMetrics(namespace string, labelsAndValues ...string) *Metrics {
 				"of the latest prevote that achieved 100% of the voting power in the prevote step.",
 		}, labels).With(labelsAndValues...),
 	}
+	fmt.Println("输出 metrics  ")
+	fmt.Println(met.NumTxs)
+	fmt.Println(met.TotalTxs)
+	fmt.Println(met.BlockSizeBytes)
+	fmt.Println("输出 metrics结束 ")
+	fmt.Println("输出 labels")
+	fmt.Println(labels)
+	fmt.Println("输出 labels")
+	return met
 }
 
 // NopMetrics returns no-op Metrics.

@@ -128,23 +128,25 @@ func (bs *BaseService) SetLogger(l log.Logger) {
 // returned if the service is already running or stopped. Not to start the
 // stopped service, you need to call Reset.
 func (bs *BaseService) Start() error {
-	if atomic.CompareAndSwapUint32(&bs.started, 0, 1) {
-		if atomic.LoadUint32(&bs.stopped) == 1 {
+	if atomic.CompareAndSwapUint32(&bs.started, 0, 1) { //原子操作将bs.started从未启动状态（0）置为已启动状态（1）
+		if atomic.LoadUint32(&bs.stopped) == 1 { //检查服务是否已经停止
 			bs.Logger.Error(fmt.Sprintf("Not starting %v service -- already stopped", bs.name),
-				"impl", bs.impl)
+				"impl", bs.impl) //若服务已经停止，记录错误日志
 			// revert flag
-			atomic.StoreUint32(&bs.started, 0)
+			atomic.StoreUint32(&bs.started, 0) //bs.started的状态重新置为未启动
 			return ErrAlreadyStopped
 		}
+		//若服务未启动，记录日志信息，表示即将启动
 		bs.Logger.Info("service start",
 			"msg",
 			log.NewLazySprintf("Starting %v service", bs.name),
 			"impl",
 			bs.impl.String())
+		//fmt.Println("[[[[[[[[[[[[[[[[[[[[[[[[[prometheus start")
 		err := bs.impl.OnStart()
 		if err != nil {
 			// revert flag
-			atomic.StoreUint32(&bs.started, 0)
+			atomic.StoreUint32(&bs.started, 0) //如果OnStart方法返回错误，将bs.started的状态重新置为未启动
 			return err
 		}
 		return nil
@@ -153,7 +155,7 @@ func (bs *BaseService) Start() error {
 		"msg",
 		log.NewLazySprintf("Not starting %v service -- already started", bs.name),
 		"impl",
-		bs.impl)
+		bs.impl) //记录调试日志，指示服务已经在运行
 	return ErrAlreadyStarted
 }
 
