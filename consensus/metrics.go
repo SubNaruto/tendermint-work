@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/go-kit/kit/metrics"
 	"github.com/go-kit/kit/metrics/discard"
-
 	prometheus "github.com/go-kit/kit/metrics/prometheus"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
 )
@@ -77,6 +76,11 @@ type Metrics struct {
 	// timestamp and the timestamp of the latest prevote in a round where 100%
 	// of the voting power on the network issued prevotes.
 	FullPrevoteMessageDelay metrics.Gauge
+
+	//计算k个区块平均TPS的交易数和时间差
+	kBlocksTxs  metrics.Gauge
+	kBlocksTime metrics.Gauge
+	kTPS        metrics.Gauge
 }
 
 // PrometheusMetrics returns Metrics build using Prometheus client library.
@@ -220,6 +224,24 @@ func PrometheusMetrics(namespace string, labelsAndValues ...string) *Metrics {
 			Help: "Difference in seconds between the proposal timestamp and the timestamp " +
 				"of the latest prevote that achieved 100% of the voting power in the prevote step.",
 		}, labels).With(labelsAndValues...),
+		kBlocksTxs: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "kBlocks_txs",
+			Help:      "Number of kBlocks transactions",
+		}, labels).With(labelsAndValues...),
+		kBlocksTime: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "kBlocks_time",
+			Help:      "Time of creating kBlocks",
+		}, labels).With(labelsAndValues...),
+		kTPS: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: MetricsSubsystem,
+			Name:      "kBlocks_average_tps",
+			Help:      "Average transactions per second (TPS) for the last kBlocks",
+		}, labels).With(labelsAndValues...),
 	}
 	fmt.Println("输出 metrics  ")
 	fmt.Println(met.NumTxs)
@@ -229,6 +251,7 @@ func PrometheusMetrics(namespace string, labelsAndValues ...string) *Metrics {
 	fmt.Println("输出 labels")
 	fmt.Println(labels)
 	fmt.Println("输出 labels")
+
 	return met
 }
 
@@ -261,5 +284,8 @@ func NopMetrics() *Metrics {
 		BlockParts:                discard.NewCounter(),
 		QuorumPrevoteMessageDelay: discard.NewGauge(),
 		FullPrevoteMessageDelay:   discard.NewGauge(),
+		kBlocksTxs:                discard.NewGauge(),
+		kBlocksTime:               discard.NewGauge(),
+		kTPS:                      discard.NewGauge(),
 	}
 }
