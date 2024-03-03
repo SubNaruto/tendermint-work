@@ -141,12 +141,11 @@ type State struct {
 	// for reporting metrics
 	metrics *Metrics
 
-	//用于计算k个区块平均TPS的队列
-	kBlocksQueue *Queue
-
-	//最后一个记录的区块的生成时间和交易数量
-	kBlocksTime float64
-	kBlocksTxs  float64
+	//计算k个区块平均TPS的队列
+	nBlocksQueue *Queue
+	//记录k区块的生成时间和交易总量
+	nBlocksTime float64
+	nBlocksTxs  float64
 }
 
 // Queue 表示一个Block队列
@@ -204,7 +203,7 @@ func NewState(
 		evpool:           evpool,
 		evsw:             tmevents.NewEventSwitch(),
 		metrics:          NopMetrics(),
-		kBlocksQueue:     NewQueue(),
+		nBlocksQueue:     NewQueue(),
 	}
 
 	// set function defaults (may be overwritten before calling Start)
@@ -1750,6 +1749,8 @@ func (cs *State) pruneBlocks(retainHeight int64) (uint64, error) {
 	return pruned, nil
 }
 
+var flagBlock *types.Block
+
 func (cs *State) recordMetrics(height int64, block *types.Block) {
 
 	cs.metrics.Validators.Set(float64(cs.Validators.Size()))                  //验证者数量
@@ -1825,40 +1826,40 @@ func (cs *State) recordMetrics(height int64, block *types.Block) {
 	cs.metrics.ByzantineValidatorsPower.Set(float64(byzantineValidatorsPower)) //拜占庭验证者的总投票权
 
 	//if height==1 创世区块
+	if height == 1 {
+		flagBlock = block
+	}
 
 	if height > 1 { //检查当前区块的高度是否大于1，表示不是创世区块，而是在创世区块之后的区块
 		lastBlockMeta := cs.blockStore.LoadBlockMeta(height - 1) //加载前一个区块的元数据，包含前一个区块的头部信息
 		if lastBlockMeta != nil {                                //成功获取
-			cs.kBlocksTime = cs.kBlocksTime + block.Time.Sub(lastBlockMeta.Header.Time).Seconds() // 记录k区块的时间和
-			cs.kBlocksTxs = cs.kBlocksTxs + float64(len(block.Data.Txs))                          // 记录k区块的交易数量
+			cs.nBlocksTime = cs.nBlocksTime + block.Time.Sub(lastBlockMeta.Header.Time).Seconds() //记录k区块的时间和
+			cs.nBlocksTxs = cs.nBlocksTxs + float64(len(block.Data.Txs))                          //记录k区块的交易数量
 			cs.metrics.BlockIntervalSeconds.Observe(
 				block.Time.Sub(lastBlockMeta.Header.Time).Seconds(),
-			) //使用Observe记录区块间的时间间隔。这是一个Histogram（直方图）指标，用于观察和记录值的分布情况，这里记录了区块之间的时间差（以秒为单位）
+			) //使用Observe记录区块间的时间间隔。（Histogram直方图指标，用于观察和记录值的分布情况，这里以秒为单位记录了区块之间的时间差）
 			//cs.metrics.kBlocksTime.Add(block.Time.Sub(lastBlockMeta.Header.Time).Seconds())
 			//cs.metrics.kBlocksTxs.Add(float64(len(block.Data.Txs)))
-			cs.kBlocksQueue.Enqueue(block)
+			cs.nBlocksQueue.Enqueue(block)
 		}
 	}
 
-	if cs.kBlocksQueue.Len() > 3 {
-		// 从队列中弹出最早的区块
-		oldestBlock := cs.kBlocksQueue.Dequeue()
-		// 计算区块间的时间差和交易数量差
-		cs.kBlocksTime = cs.kBlocksTime + block.Time.Sub(oldestBlock.Header.Time).Seconds()
-		cs.kBlocksTxs = cs.kBlocksTxs - float64(len(oldestBlock.Data.Txs))
+	if cs.nBlocksQueue.Len() > 3 { //计算n个区块的生成时间和交易总量
+		oldestBlock := cs.nBlocksQueue.Dequeue() //从队列中弹出最早的区块
+		cs.nBlocksTime = cs.nBlocksTime - oldestBlock.Time.Sub(flagBlock.Header.Time).Seconds()
+		flagBlock = oldestBlock
+		cs.nBlocksTxs = cs.nBlocksTxs - float64(len(oldestBlock.Data.Txs))
+	}
+	cs.metrics.nBlocksTime.Set(cs.nBlocksTime)
+	cs.metrics.nBlocksTxs.Set(cs.nBlocksTxs)
+	if cs.nBlocksTime > 0 { //计算平均 TPS
+		tps := float64(cs.nBlocksTxs) / cs.nBlocksTime
+		cs.metrics.nBlocksTPS.Set(tps)
 	}
 
-	cs.metrics.kBlocksTime.Set(cs.kBlocksTime)
-	cs.metrics.kBlocksTxs.Set(cs.kBlocksTxs)
-	// 计算平均 TPS
-	if cs.kBlocksTime > 0 {
-		tps := float64(cs.kBlocksTxs) / cs.kBlocksTime
-		cs.metrics.kTPS.Set(tps)
-	}
-
-	fmt.Println("[[[[[[[[[[[[[[[[[[[[[[[[metrics txs add")
-	fmt.Println("totalTxs初始值：")
-	fmt.Println(cs.metrics.TotalTxs)
+	//fmt.Println("[[[[[[[[[[[[[[[[[[[[[[[[metrics txs add")
+	//fmt.Println("totalTxs初始值：")
+	//fmt.Println(cs.metrics.TotalTxs)
 	cs.metrics.NumTxs.Set(float64(len(block.Data.Txs)))   //当前区块中交易的数量
 	cs.metrics.TotalTxs.Add(float64(len(block.Data.Txs))) //当前区块中交易的数量累加到总交易数量中
 	cs.metrics.BlockSizeBytes.Set(float64(block.Size()))  //当前区块的大小
